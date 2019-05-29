@@ -1,6 +1,19 @@
 {
-	"include": ["src", "test"],
 	"compilerOptions": {
+		"composite": true,
+		"declaration": true,
+		"declarationMap": true,
+		"downlevelIteration": true,
+		"incremental": true,
+		"module": "commonjs",
+		"noImplicitAny": true,
+		"noUnusedLocals": true,
+		"sourceMap": true,
+		"strict": true,
+		"target": "es6",
+		"allowUnusedLabels": false,
+		"allowUnreachableCode": false,
+		"pretty": true,
 		"plugins": [
 			{
 				"name": "tslint-language-service",
@@ -8,16 +21,7 @@
 				"alwaysShowRuleFailuresAsWarnings": false
 			}
 		],
-		"target": "esnext",
-		"module": "commonjs",
-		"lib": ["esnext"],
-		"outDir": "./dist",
-		"downlevelIteration": true,
-		"strict": true,
-		"noImplicitAny": true,
-		"allowUnusedLabels": false,
-		"allowUnreachableCode": false,
-		"noUnusedLocals": true,
-		"pretty": true
-	}
+		"outDir": "./dist"
+	},
+	"include": ["src", "test"]
 }
