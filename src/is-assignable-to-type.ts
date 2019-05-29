@@ -1,12 +1,12 @@
 import { Node, Program, Type, TypeChecker } from "typescript";
-import { isAssignableToSimpleType } from "./is-assignable-to-simple-type";
 import { isSimpleType, SimpleType } from "./simple-type";
 import { SimpleTypeComparisonOptions } from "./simple-type-comparison-options";
 import { toSimpleType } from "./to-simple-type";
 import { isNode, isProgram, isTypeChecker } from "./ts-util";
+import { MasterType } from "./master-type";
 
 const simpleTypeCache = new WeakMap<Type, SimpleType>();
-const isAssignableTypeCache = new WeakMap<SimpleType, WeakMap<SimpleType, boolean>>();
+const isAssignableTypeCache = new WeakMap<MasterType, WeakMap<MasterType, boolean>>();
 
 /**
  * Tests if "typeA = typeB" in strict mode.
@@ -49,7 +49,7 @@ export function isAssignableToType(
 
 	const typeAResultCache = (() => {
 		if (isAssignableTypeCache.has(simpleTypeA)) {
-			return isAssignableTypeCache.get(simpleTypeA) as WeakMap<SimpleType, boolean>;
+			return isAssignableTypeCache.get(simpleTypeA)!;
 		}
 
 		const newResultCache = new WeakMap<SimpleType, boolean>();
@@ -58,7 +58,7 @@ export function isAssignableToType(
 	})();
 
 	if (typeAResultCache.has(simpleTypeB)) {
-		return typeAResultCache.get(simpleTypeB) as boolean;
+		return typeAResultCache.get(simpleTypeB) !== undefined;
 	}
 
 	/*console.log("Type A");
@@ -66,7 +66,7 @@ export function isAssignableToType(
 	 console.log("Type B");
 	 console.dir(simpleTypeB, { depth: 5 });*/
 
-	const result = isAssignableToSimpleType(simpleTypeA, simpleTypeB, options);
+	const result = MasterType.isAssignableTo(simpleTypeA, simpleTypeB, options);
 
 	typeAResultCache.set(simpleTypeB, result);
 

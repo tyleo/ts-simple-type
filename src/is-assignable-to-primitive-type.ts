@@ -12,7 +12,7 @@ export function isAssignableToPrimitiveType(type: Type, checker: TypeChecker): b
 export function isAssignableToPrimitiveType(type: Type | SimpleType, checker: TypeChecker): boolean;
 export function isAssignableToPrimitiveType(type: Type | SimpleType, checker?: TypeChecker): boolean {
 	if (isSimpleType(type)) {
-		return isAssignableToSimpleTypeKind(type, PRIMITIVE_TYPE_KINDS, { op: "or", matchAny: true });
+	return isAssignableToSimpleTypeKind(type, PRIMITIVE_TYPE_KINDS, { op: "or", matchAny: true });
 	}
 
 	return isAssignableToSimpleTypeKind(type, PRIMITIVE_TYPE_KINDS, checker as TypeChecker, { op: "or", matchAny: true });

@@ -19,6 +19,7 @@ import {
 	SimpleTypeObject,
 	SimpleTypeUndefined
 } from "./simple-type";
+import { MasterType } from "./master-type";
 import { tsModule } from "./ts-module";
 import {
 	getDeclaration,
@@ -54,23 +55,32 @@ import {
  * @param checker
  * @param cache
  */
-export function toSimpleType(type: Node, checker: TypeChecker, cache?: WeakMap<Type, SimpleType>): SimpleType;
-export function toSimpleType(type: Type, checker: TypeChecker, cache?: WeakMap<Type, SimpleType>): SimpleType;
-export function toSimpleType(type: Type | Node, checker: TypeChecker, cache?: WeakMap<Type, SimpleType>): SimpleType {
+export function toSimpleType(type: Node, checker: TypeChecker, cache?: WeakMap<Type, SimpleType>): MasterType;
+export function toSimpleType(type: Type, checker: TypeChecker, cache?: WeakMap<Type, SimpleType>): MasterType;
+export function toSimpleType(type: Type | Node, checker: TypeChecker, cache?: WeakMap<Type, SimpleType>): MasterType {
 	if (isNode(type)) {
 		// "type" is a "Node", convert it to a "Type" and continue.
 		return toSimpleType(checker.getTypeAtLocation(type), checker);
 	}
 
-	return toSimpleTypeInternalCaching(type, {
+	const circularTypesByIndex: SimpleType[] = [];
+	const simpleType = toSimpleTypeInternalCaching(type, {
 		checker,
-		circularCache: new WeakMap<Type, SimpleType>(),
+		circularTypesByIndex,
+		circularCache: new WeakMap<Type, { type: SimpleType; index: number }>(),
 		cache: cache || new WeakMap<Type, SimpleType>()
 	});
+	return circularTypesByIndex.length > 0
+		? {
+				type: simpleType,
+				cache: circularTypesByIndex
+		  }
+		: simpleType;
 }
 
 export interface ToSimpleTypeOptions {
-	circularCache: WeakMap<Type, SimpleType>;
+	circularTypesByIndex: SimpleType[];
+	circularCache: WeakMap<Type, { type: SimpleType; index: number }>;
 	cache: WeakMap<Type, SimpleType>;
 	checker: TypeChecker;
 }
@@ -88,10 +98,15 @@ function toSimpleTypeInternalCaching(type: Type, options: ToSimpleTypeOptions): 
 		return options.cache.get(type)!;
 	}
 
-	if (options.circularCache.has(type)) {
+	const cachedItem = options.circularCache.get(type);
+	if (cachedItem !== undefined) {
+		if (cachedItem.index === -1) {
+			cachedItem.index = options.circularTypesByIndex.length;
+			options.circularTypesByIndex.push(cachedItem.type);
+		}
 		return {
-			kind: SimpleTypeKind.CIRCULAR_TYPE_REF,
-			ref: options.circularCache.get(type)!
+			kind: SimpleTypeKind.FLAT_TYPE_REF,
+			ref: cachedItem.index
 		};
 	} else {
 		// Connect the type to the placeholder reference
@@ -99,7 +114,7 @@ function toSimpleTypeInternalCaching(type: Type, options: ToSimpleTypeOptions): 
 		// Only return a circular ref if it's a class of interface.
 		// Don't return circular ref if it's a primitive like a "number"
 		if (type.isClassOrInterface() || (isObject(type) && isObjectTypeReference(type))) {
-			options.circularCache.set(type, placeholder);
+			options.circularCache.set(type, { type: placeholder, index: -1 });
 		}
 	}
 

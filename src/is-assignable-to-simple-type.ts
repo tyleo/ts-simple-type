@@ -17,7 +17,17 @@ const DEFAULT_CONFIG: SimpleTypeComparisonOptions = {
  * @param config
  */
 export function isAssignableToSimpleType(typeA: SimpleType, typeB: SimpleType, config: SimpleTypeComparisonOptions = DEFAULT_CONFIG): boolean {
-	return isAssignableToSimpleTypeInternal(typeA, typeB, {
+	return isAssignableToSimpleTypeWithCache(typeA, [], typeB, [], config);
+}
+
+export function isAssignableToSimpleTypeWithCache(
+	typeA: SimpleType,
+	typeACache: SimpleType[],
+	typeB: SimpleType,
+	typeBCache: SimpleType[],
+	config: SimpleTypeComparisonOptions = DEFAULT_CONFIG
+): boolean {
+	return isAssignableToSimpleTypeInternal(typeA, typeACache, typeB, typeBCache, {
 		config,
 		inCircularA: false,
 		inCircularB: false,
@@ -36,7 +46,7 @@ interface IsAssignableToSimpleTypeOptions {
 	genericParameterMapB: Map<string, SimpleType>;
 }
 
-function isAssignableToSimpleTypeInternal(typeA: SimpleType, typeB: SimpleType, options: IsAssignableToSimpleTypeOptions): boolean {
+function isAssignableToSimpleTypeInternal(typeA: SimpleType, typeACache: SimpleType[], typeB: SimpleType, typeBCache: SimpleType[], options: IsAssignableToSimpleTypeOptions): boolean {
 	/**
 	 options = { ...options };
 	 (options as any).depth = ((options as any).depth || 0) + 1;
@@ -83,30 +93,30 @@ function isAssignableToSimpleTypeInternal(typeA: SimpleType, typeB: SimpleType, 
 		case SimpleTypeKind.NEVER:
 			return true;
 
-		case SimpleTypeKind.CIRCULAR_TYPE_REF:
-			return isAssignableToSimpleTypeInternal(typeA, typeB.ref, {
+		case SimpleTypeKind.FLAT_TYPE_REF:
+			return isAssignableToSimpleTypeInternal(typeA, typeACache, typeBCache[typeB.ref], typeBCache, {
 				...options,
 				inCircularB: true,
 				insideType: new Set([...options.insideType, typeB])
 			});
 		case SimpleTypeKind.ENUM_MEMBER:
-			return isAssignableToSimpleTypeInternal(typeA, typeB.type, options);
+			return isAssignableToSimpleTypeInternal(typeA, typeACache, typeB.type, typeBCache, options);
 		case SimpleTypeKind.ENUM:
-			return and(typeB.types, childTypeB => isAssignableToSimpleTypeInternal(typeA, childTypeB, options));
+			return and(typeB.types, childTypeB => isAssignableToSimpleTypeInternal(typeA, typeACache, childTypeB, typeBCache, options));
 		case SimpleTypeKind.UNION:
-			return and(typeB.types, childTypeB => isAssignableToSimpleTypeInternal(typeA, childTypeB, options));
+			return and(typeB.types, childTypeB => isAssignableToSimpleTypeInternal(typeA, typeACache, childTypeB, typeBCache, options));
 		case SimpleTypeKind.INTERSECTION: {
 			const combinedIntersectionType = combineIntersectingSimpleTypes(typeB.types);
 			if (combinedIntersectionType.kind === SimpleTypeKind.INTERSECTION) {
 				return false;
 			}
-			return isAssignableToSimpleTypeInternal(typeA, combinedIntersectionType, options);
+			return isAssignableToSimpleTypeInternal(typeA, typeACache, combinedIntersectionType, typeBCache, options);
 		}
 
 		case SimpleTypeKind.ALIAS:
-			return isAssignableToSimpleTypeInternal(typeA, typeB.target, options);
+			return isAssignableToSimpleTypeInternal(typeA, typeACache, typeB.target, typeBCache, options);
 		case SimpleTypeKind.GENERIC_ARGUMENTS: {
-			return isAssignableToSimpleTypeInternal(typeA, typeB.target, {
+			return isAssignableToSimpleTypeInternal(typeA, typeACache, typeB.target, typeBCache, {
 				...options,
 				genericParameterMapB: extendTypeParameterMap(typeB, options.genericParameterMapB)
 			});
@@ -118,7 +128,7 @@ function isAssignableToSimpleTypeInternal(typeA: SimpleType, typeB: SimpleType, 
 			};
 
 			const realType = options.genericParameterMapB.get(typeB.name);
-			return isAssignableToSimpleTypeInternal(typeA, realType || typeB.default || { kind: SimpleTypeKind.ANY }, newOptions);
+			return isAssignableToSimpleTypeInternal(typeA, typeACache, realType || typeB.default || { kind: SimpleTypeKind.ANY }, typeBCache, newOptions);
 		}
 
 		case SimpleTypeKind.UNDEFINED:
@@ -133,8 +143,8 @@ function isAssignableToSimpleTypeInternal(typeA: SimpleType, typeB: SimpleType, 
 
 	switch (typeA.kind) {
 		// Circular references
-		case SimpleTypeKind.CIRCULAR_TYPE_REF:
-			return isAssignableToSimpleTypeInternal(typeA.ref, typeB, {
+		case SimpleTypeKind.FLAT_TYPE_REF:
+			return isAssignableToSimpleTypeInternal(typeACache[typeA.ref], typeACache, typeB, typeBCache, {
 				...options,
 				inCircularA: true,
 				insideType: new Set([...options.insideType, typeA])
@@ -148,7 +158,7 @@ function isAssignableToSimpleTypeInternal(typeA: SimpleType, typeB: SimpleType, 
 			return isSimpleTypeLiteral(typeB) ? typeA.value === typeB.value : false;
 
 		case SimpleTypeKind.ENUM_MEMBER:
-			return isAssignableToSimpleTypeInternal(typeA.type, typeB, options);
+			return isAssignableToSimpleTypeInternal(typeA.type, typeACache, typeB, typeBCache, options);
 
 		// Primitive types
 		case SimpleTypeKind.STRING:
@@ -176,7 +186,7 @@ function isAssignableToSimpleTypeInternal(typeA: SimpleType, typeB: SimpleType, 
 
 		// Alias
 		case SimpleTypeKind.ALIAS:
-			return isAssignableToSimpleTypeInternal(typeA.target, typeB, options);
+			return isAssignableToSimpleTypeInternal(typeA.target, typeACache, typeB, typeBCache, options);
 
 		// Generic types
 		case SimpleTypeKind.GENERIC_PARAMETER: {
@@ -186,11 +196,11 @@ function isAssignableToSimpleTypeInternal(typeA: SimpleType, typeB: SimpleType, 
 			};
 
 			const realType = options.genericParameterMapA.get(typeA.name);
-			return isAssignableToSimpleTypeInternal(realType || typeA.default || { kind: SimpleTypeKind.ANY }, typeB, newOptions);
+			return isAssignableToSimpleTypeInternal(realType || typeA.default || { kind: SimpleTypeKind.ANY }, typeACache, typeB, typeBCache, newOptions);
 		}
 
 		case SimpleTypeKind.GENERIC_ARGUMENTS:
-			return isAssignableToSimpleTypeInternal(typeA.target, typeB, {
+			return isAssignableToSimpleTypeInternal(typeA.target, typeACache, typeB, typeBCache, {
 				...options,
 				genericParameterMapA: extendTypeParameterMap(typeA, options.genericParameterMapA)
 			});
@@ -198,9 +208,9 @@ function isAssignableToSimpleTypeInternal(typeA: SimpleType, typeB: SimpleType, 
 		// Arrays
 		case SimpleTypeKind.ARRAY: {
 			if (typeB.kind === SimpleTypeKind.ARRAY) {
-				return isAssignableToSimpleTypeInternal(typeA.type, typeB.type, options);
+				return isAssignableToSimpleTypeInternal(typeA.type, typeACache, typeB.type, typeBCache, options);
 			} else if (typeB.kind === SimpleTypeKind.TUPLE) {
-				return and(typeB.members, memberB => isAssignableToSimpleTypeInternal(typeA.type, memberB.type, options));
+				return and(typeB.members, memberB => isAssignableToSimpleTypeInternal(typeA.type, typeACache, memberB.type, typeBCache, options));
 			}
 
 			return false;
@@ -215,14 +225,14 @@ function isAssignableToSimpleTypeInternal(typeA: SimpleType, typeB: SimpleType, 
 			if (typeA.argTypes == null || typeA.returnType == null) return true;
 
 			// Any returntype is assignable to void
-			if (typeA.returnType.kind !== SimpleTypeKind.VOID && !isAssignableToSimpleTypeInternal(typeA.returnType, typeB.returnType, options)) return false;
+			if (typeA.returnType.kind !== SimpleTypeKind.VOID && !isAssignableToSimpleTypeInternal(typeA.returnType, typeACache, typeB.returnType, typeBCache, options)) return false;
 
 			// Test "this" types
 			const typeAThisArg = typeA.argTypes.find(arg => arg.name === "this");
 			const typeBThisArg = typeB.argTypes.find(arg => arg.name === "this");
 
 			if (typeAThisArg != null && typeBThisArg != null) {
-				if (!isAssignableToSimpleTypeInternal(typeAThisArg.type, typeBThisArg.type, options)) {
+				if (!isAssignableToSimpleTypeInternal(typeAThisArg.type, typeACache, typeBThisArg.type, typeBCache, options)) {
 					return false;
 				}
 			}
@@ -252,7 +262,7 @@ function isAssignableToSimpleTypeInternal(typeA: SimpleType, typeB: SimpleType, 
 
 				// Check if we are comparing a spread against a non-spread
 				if (argA.spread && argA.type.kind === SimpleTypeKind.ARRAY && (!argB.spread && argB.type.kind !== SimpleTypeKind.ARRAY)) {
-					if (!isAssignableToSimpleTypeInternal(argA.type.type, argB.type, options)) {
+					if (!isAssignableToSimpleTypeInternal(argA.type.type, typeACache, argB.type, typeBCache, options)) {
 						return false;
 					}
 
@@ -260,7 +270,7 @@ function isAssignableToSimpleTypeInternal(typeA: SimpleType, typeB: SimpleType, 
 				}
 
 				// If the types are not assignable return false right away
-				if (!isAssignableToSimpleTypeInternal(argB.type, argA.type, options)) {
+				if (!isAssignableToSimpleTypeInternal(argB.type, typeBCache, argA.type, typeACache, options)) {
 					return false;
 				}
 			}
@@ -271,7 +281,7 @@ function isAssignableToSimpleTypeInternal(typeA: SimpleType, typeB: SimpleType, 
 		// Unions and enum members
 		case SimpleTypeKind.ENUM:
 		case SimpleTypeKind.UNION:
-			return or(typeA.types, childTypeA => isAssignableToSimpleTypeInternal(childTypeA, typeB, options));
+			return or(typeA.types, childTypeA => isAssignableToSimpleTypeInternal(childTypeA, typeACache, typeB, typeBCache, options));
 
 		// Intersections
 		case SimpleTypeKind.INTERSECTION: {
@@ -281,7 +291,7 @@ function isAssignableToSimpleTypeInternal(typeA: SimpleType, typeB: SimpleType, 
 				return false;
 			}
 
-			return isAssignableToSimpleTypeInternal(combinedIntersectionType, typeB, options);
+			return isAssignableToSimpleTypeInternal(combinedIntersectionType, typeACache, typeB, typeBCache, options);
 		}
 
 		// Interfaces
@@ -296,7 +306,9 @@ function isAssignableToSimpleTypeInternal(typeA: SimpleType, typeB: SimpleType, 
 						kind: SimpleTypeKind.UNION,
 						types: [{ kind: SimpleTypeKind.NULL }, { kind: SimpleTypeKind.UNDEFINED }]
 					},
+					typeACache,
 					typeB,
+					typeBCache,
 					options
 				);
 			}
@@ -327,7 +339,7 @@ function isAssignableToSimpleTypeInternal(typeA: SimpleType, typeB: SimpleType, 
 								//return typeA.kind === SimpleTypeKind.OBJECT && typeB.kind === SimpleTypeKind.OBJECT;
 								return typeA.kind === typeB.kind;
 							}
-							return isAssignableToSimpleTypeInternal(memberA.type, memberB.type, newOptions);
+							return isAssignableToSimpleTypeInternal(memberA.type, typeACache, memberB.type, typeBCache, newOptions);
 						})
 					);
 				}
@@ -341,12 +353,12 @@ function isAssignableToSimpleTypeInternal(typeA: SimpleType, typeB: SimpleType, 
 			return and(typeA.members, (memberA, i) => {
 				const memberB = typeB.members[i];
 				if (memberB == null) return memberA.optional;
-				return isAssignableToSimpleTypeInternal(memberA.type, memberB.type, options);
+				return isAssignableToSimpleTypeInternal(memberA.type, typeACache, memberB.type, typeBCache, options);
 			});
 		}
 
 		case SimpleTypeKind.PROMISE:
-			return typeB.kind === SimpleTypeKind.PROMISE && isAssignableToSimpleTypeInternal(typeA.type, typeB.type, options);
+			return typeB.kind === SimpleTypeKind.PROMISE && isAssignableToSimpleTypeInternal(typeA.type, typeACache, typeB.type, typeBCache, options);
 
 		case SimpleTypeKind.DATE:
 			return typeB.kind === SimpleTypeKind.DATE;

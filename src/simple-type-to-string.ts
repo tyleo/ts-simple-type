@@ -5,10 +5,14 @@ import { SimpleType, SimpleTypeFunctionArgument, SimpleTypeKind } from "./simple
  * @param type Simple Type
  */
 export function simpleTypeToString(type: SimpleType): string {
+	return simpleTypeToStringWithCache(type, []);
+}
+
+export function simpleTypeToStringWithCache(type: SimpleType, cache: SimpleType[]): string {
 	//}, options: SimpleTypeToStringOptions): string {
 	switch (type.kind) {
-		case SimpleTypeKind.CIRCULAR_TYPE_REF:
-			return type.ref.name || "[Circular]";
+		case SimpleTypeKind.FLAT_TYPE_REF:
+			return cache[type.ref].name || "[Circular]";
 		case SimpleTypeKind.BOOLEAN_LITERAL:
 			return String(type.value);
 		case SimpleTypeKind.NUMBER_LITERAL:
@@ -40,21 +44,21 @@ export function simpleTypeToString(type: SimpleType): string {
 		case SimpleTypeKind.FUNCTION:
 		case SimpleTypeKind.METHOD: {
 			if (type.kind === SimpleTypeKind.FUNCTION && type.name != null) return type.name;
-			const argText = functionArgTypesToString(type.argTypes || []);
+			const argText = functionArgTypesToString(type.argTypes || [], cache);
 			return `${type.typeParameters != null ? `<${type.typeParameters.map(tp => tp.name).join(",")}>` : ""}(${argText})${
-				type.returnType != null ? ` => ${simpleTypeToString(type.returnType)}` : ""
+				type.returnType != null ? ` => ${simpleTypeToStringWithCache(type.returnType, cache)}` : ""
 			}`;
 		}
 		case SimpleTypeKind.ARRAY: {
 			const hasMultipleTypes = [SimpleTypeKind.UNION, SimpleTypeKind.INTERSECTION].includes(type.type.kind);
-			let memberType = simpleTypeToString(type.type);
+			let memberType = simpleTypeToStringWithCache(type.type, cache);
 			if (type.name != null && ["ArrayLike", "ReadonlyArray"].includes(type.name)) return `${type.name}<${memberType}>`;
 			if (hasMultipleTypes && type.type.name == null) memberType = `(${memberType})`;
 			return `${memberType}[]`;
 		}
 		case SimpleTypeKind.UNION: {
 			if (type.name != null) return type.name;
-			return type.types.map(simpleTypeToString).join(" | ");
+			return type.types.map(i => simpleTypeToStringWithCache(i, cache)).join(" | ");
 		}
 		case SimpleTypeKind.ENUM:
 			return type.name;
@@ -62,7 +66,7 @@ export function simpleTypeToString(type: SimpleType): string {
 			return type.fullName;
 		case SimpleTypeKind.INTERSECTION:
 			if (type.name != null) return type.name;
-			return type.types.map(simpleTypeToString).join(" & ");
+			return type.types.map(i => simpleTypeToStringWithCache(i, cache)).join(" & ");
 		case SimpleTypeKind.INTERFACE:
 			if (type.name != null) return type.name;
 		// this fallthrough is intentional
@@ -72,22 +76,22 @@ export function simpleTypeToString(type: SimpleType): string {
 				.map(member => {
 					// this check needs to change in the future
 					if (member.type.kind === SimpleTypeKind.FUNCTION || member.type.kind === SimpleTypeKind.METHOD) {
-						const result = simpleTypeToString(member.type);
+						const result = simpleTypeToStringWithCache(member.type, cache);
 						return `${member.name}${result.replace(" => ", ": ")}`;
 					}
 
-					return `${member.name}: ${simpleTypeToString(member.type)}`;
+					return `${member.name}: ${simpleTypeToStringWithCache(member.type, cache)}`;
 				})
 				.join("; ")}${type.members.length > 0 ? ";" : ""} }`;
 		}
 		case SimpleTypeKind.TUPLE:
-			return `[${type.members.map(member => `${simpleTypeToString(member.type)}${member.optional ? "?" : ""}`).join(", ")}]`;
+			return `[${type.members.map(member => `${simpleTypeToStringWithCache(member.type, cache)}${member.optional ? "?" : ""}`).join(", ")}]`;
 		case SimpleTypeKind.GENERIC_ARGUMENTS: {
 			const { target, typeArguments } = type;
-			return typeArguments.length === 0 ? target.name || "" : `${target.name}<${typeArguments.map(simpleTypeToString).join(", ")}>`;
+			return typeArguments.length === 0 ? target.name || "" : `${target.name}<${typeArguments.map(i => simpleTypeToStringWithCache(i, cache)).join(", ")}>`;
 		}
 		case SimpleTypeKind.PROMISE:
-			return `${type.name || "Promise"}<${simpleTypeToString(type.type)}>`;
+			return `${type.name || "Promise"}<${simpleTypeToStringWithCache(type.type, cache)}>`;
 		case SimpleTypeKind.DATE:
 			return "Date";
 		default:
@@ -95,10 +99,10 @@ export function simpleTypeToString(type: SimpleType): string {
 	}
 }
 
-function functionArgTypesToString(argTypes: SimpleTypeFunctionArgument[]): string {
+function functionArgTypesToString(argTypes: SimpleTypeFunctionArgument[], cache: SimpleType[]): string {
 	return argTypes
 		.map(arg => {
-			return `${arg.spread ? "..." : ""}${arg.name}${arg.optional ? "?" : ""}: ${simpleTypeToString(arg.type)}`;
+			return `${arg.spread ? "..." : ""}${arg.name}${arg.optional ? "?" : ""}: ${simpleTypeToStringWithCache(arg.type, cache)}`;
 		})
 		.join(", ");
 }

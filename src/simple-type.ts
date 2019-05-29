@@ -23,7 +23,7 @@ export enum SimpleTypeKind {
 	FUNCTION = "FUNCTION",
 	METHOD = "METHOD",
 	CLASS = "CLASS",
-	CIRCULAR_TYPE_REF = "CIRCULAR_TYPE_REF",
+	FLAT_TYPE_REF = "FLAT_TYPE_REF",
 	GENERIC_ARGUMENTS = "GENERIC_ARGUMENTS",
 	GENERIC_PARAMETER = "GENERIC_PARAMETER",
 	ALIAS = "ALIAS",
@@ -225,16 +225,16 @@ export interface SimpleTypeVoid extends SimpleTypeBase {
 	kind: SimpleTypeKind.VOID;
 }
 
-export interface SimpleTypeCircularRef extends SimpleTypeBase {
-	kind: SimpleTypeKind.CIRCULAR_TYPE_REF;
-	ref: SimpleType;
+export interface SimpleTypeFlatRef extends SimpleTypeBase {
+	kind: SimpleTypeKind.FLAT_TYPE_REF;
+	ref: number;
 }
 
 export type SimpleType =
 	| SimpleTypeBigIntLiteral
 	| SimpleTypeEnumMember
 	| SimpleTypeEnum
-	| SimpleTypeCircularRef
+	| SimpleTypeFlatRef
 	| SimpleTypeClass
 	| SimpleTypeFunction
 	| SimpleTypeObject

@@ -2,11 +2,11 @@ import test from "ava";
 import { resolve } from "path";
 import { CompilerOptions, Diagnostic, Type, TypeChecker, VariableDeclaration, Program } from "typescript";
 import { isAssignableToType } from "../src/is-assignable-to-type";
-import { simpleTypeToString } from "../src/simple-type-to-string";
 import { toSimpleType } from "../src/to-simple-type";
 import { compile } from "./compile";
 import "./compile";
 import { visitAssignments } from "./visit-assignments";
+import { MasterType } from "../src";
 
 // Example usage: "LINE=2,5 npm test"
 const arg = process.argv.slice(2)[0];
@@ -72,7 +72,7 @@ function executeToStringTest(testTitle: string, line: number, typeA: Type, typeB
 
 	test(`[${testTitle}] ${line + 1}: simpleTypeToString('${typeAStr}')`, t => {
 		const simpleTypeA = toSimpleType(typeA, checker);
-		const simpleTypeAStr = simpleTypeToString(simpleTypeA);
+		const simpleTypeAStr = MasterType.toString(simpleTypeA);
 
 		if (simpleTypeAStr !== typeAStr) {
 			t.log(simpleTypeA);
@@ -89,7 +89,7 @@ function executeToStringTest(testTitle: string, line: number, typeA: Type, typeB
 
 	test(`[${testTitle}] ${line + 1}: simpleTypeToString('${typeBStr}')`, t => {
 		const simpleTypeB = toSimpleType(typeB, checker);
-		const simpleTypeBStr = simpleTypeToString(simpleTypeB);
+		const simpleTypeBStr = MasterType.toString(simpleTypeB);
 
 		if (simpleTypeBStr !== typeBStr) {
 			t.log(simpleTypeB);
@@ -117,11 +117,13 @@ function executeTypeCheckerTest(
 
 		if (shouldBeAssignable !== isAssignable) {
 			const simpleTypeA = toSimpleType(typeA, checker);
+			const { type: actualTypeA } = "cache" in simpleTypeA ? simpleTypeA : { type: simpleTypeA };
 			const simpleTypeB = toSimpleType(typeB, checker);
+			const { type: actualTypeB } = "cache" in simpleTypeB ? simpleTypeB : { type: simpleTypeB };
 			//console.dir(simpleTypeA, { depth: 10 });
 			//console.dir(simpleTypeB, { depth: 10 });
 			return t.fail(
-				`${isAssignable ? "Can" : "Can't"} assign '${typeBStr}' (${simpleTypeB.kind}) to '${typeAStr}' (${simpleTypeA.kind}) but ${
+				`${isAssignable ? "Can" : "Can't"} assign '${typeBStr}' (${actualTypeB.kind}) to '${typeAStr}' (${actualTypeA.kind}) but ${
 					shouldBeAssignable ? "it should be allowed!" : "it shouldn't be allowed!"
 				}`
 			);
