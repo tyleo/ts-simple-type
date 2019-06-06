@@ -122,8 +122,11 @@ function toSimpleTypeInternalCaching(type: Type, options: ToSimpleTypeOptions): 
 	const simpleTypeOverwrite = toSimpleTypeInternal(type, options);
 
 	// Strip undefined keys to make the output cleaner
-	Object.entries<unknown>(simpleTypeOverwrite).forEach(([k, v]) => {
-		if (v == null) delete simpleTypeOverwrite[k as keyof typeof simpleTypeOverwrite];
+	Object.keys(simpleTypeOverwrite).forEach(key => {
+		const value = simpleTypeOverwrite[key as keyof typeof simpleTypeOverwrite];
+		if (value === null) {
+			delete simpleTypeOverwrite[key as keyof typeof simpleTypeOverwrite];
+		}
 	});
 
 	// Transfer properties on the simpleType to the placeholder
